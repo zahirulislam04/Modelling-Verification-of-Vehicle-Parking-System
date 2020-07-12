@@ -1,0 +1,62 @@
+Performing C SOURCE FILE Test CMAKE_HAVE_LIBC_PTHREAD failed with the following output:
+Change Dir: /mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-build/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make cmTC_cab0d/fast && make[3]: Entering directory '/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-build/CMakeFiles/CMakeTmp'
+/usr/bin/make -f CMakeFiles/cmTC_cab0d.dir/build.make CMakeFiles/cmTC_cab0d.dir/build
+make[4]: Entering directory '/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-build/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_cab0d.dir/src.c.o
+/usr/bin/cc   -DCMAKE_HAVE_LIBC_PTHREAD   -o CMakeFiles/cmTC_cab0d.dir/src.c.o   -c /mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-build/CMakeFiles/CMakeTmp/src.c
+Linking C executable cmTC_cab0d
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_cab0d.dir/link.txt --verbose=1
+/usr/bin/cc  -DCMAKE_HAVE_LIBC_PTHREAD    -rdynamic CMakeFiles/cmTC_cab0d.dir/src.c.o  -o cmTC_cab0d 
+/usr/bin/ld: CMakeFiles/cmTC_cab0d.dir/src.c.o: in function `main':
+src.c:(.text+0x46): undefined reference to `pthread_create'
+/usr/bin/ld: src.c:(.text+0x52): undefined reference to `pthread_detach'
+/usr/bin/ld: src.c:(.text+0x63): undefined reference to `pthread_join'
+collect2: error: ld returned 1 exit status
+make[4]: *** [CMakeFiles/cmTC_cab0d.dir/build.make:87: cmTC_cab0d] Error 1
+make[4]: Leaving directory '/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-build/CMakeFiles/CMakeTmp'
+make[3]: *** [Makefile:121: cmTC_cab0d/fast] Error 2
+make[3]: Leaving directory '/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-build/CMakeFiles/CMakeTmp'
+
+
+Source file was:
+#include <pthread.h>
+
+void* test_func(void* data)
+{
+  return data;
+}
+
+int main(void)
+{
+  pthread_t thread;
+  pthread_create(&thread, NULL, test_func, NULL);
+  pthread_detach(thread);
+  pthread_join(thread, NULL);
+  pthread_atfork(NULL, NULL, NULL);
+  pthread_exit(NULL);
+
+  return 0;
+}
+
+Determining if the function pthread_create exists in the pthreads failed with the following output:
+Change Dir: /mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-build/CMakeFiles/CMakeTmp
+
+Run Build Command(s):/usr/bin/make cmTC_ea9ee/fast && make[3]: Entering directory '/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-build/CMakeFiles/CMakeTmp'
+/usr/bin/make -f CMakeFiles/cmTC_ea9ee.dir/build.make CMakeFiles/cmTC_ea9ee.dir/build
+make[4]: Entering directory '/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-build/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_ea9ee.dir/CheckFunctionExists.c.o
+/usr/bin/cc   -DCHECK_FUNCTION_EXISTS=pthread_create   -o CMakeFiles/cmTC_ea9ee.dir/CheckFunctionExists.c.o   -c /usr/share/cmake-3.16/Modules/CheckFunctionExists.c
+Linking C executable cmTC_ea9ee
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_ea9ee.dir/link.txt --verbose=1
+/usr/bin/cc  -DCHECK_FUNCTION_EXISTS=pthread_create    -rdynamic CMakeFiles/cmTC_ea9ee.dir/CheckFunctionExists.c.o  -o cmTC_ea9ee  -lpthreads 
+/usr/bin/ld: cannot find -lpthreads
+collect2: error: ld returned 1 exit status
+make[4]: *** [CMakeFiles/cmTC_ea9ee.dir/build.make:87: cmTC_ea9ee] Error 1
+make[4]: Leaving directory '/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-build/CMakeFiles/CMakeTmp'
+make[3]: *** [Makefile:121: cmTC_ea9ee/fast] Error 2
+make[3]: Leaving directory '/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-build/CMakeFiles/CMakeTmp'
+
+
+

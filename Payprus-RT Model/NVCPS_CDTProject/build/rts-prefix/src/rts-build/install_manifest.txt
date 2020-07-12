@@ -1,0 +1,1 @@
+/mnt/c/Papyrus-RT/plugins/org.eclipse.papyrusrt.rts_1.0.0.201707181457/umlrts/lib/linux/x86-g++-9.3.0/debug/librtsd.a

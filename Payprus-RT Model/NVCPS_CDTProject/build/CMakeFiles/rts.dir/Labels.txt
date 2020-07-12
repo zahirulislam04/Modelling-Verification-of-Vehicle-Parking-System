@@ -1,0 +1,13 @@
+# Target labels
+ rts
+# Source files and their labels
+/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/CMakeFiles/rts
+/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/CMakeFiles/rts.rule
+/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/CMakeFiles/rts-complete.rule
+/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-stamp/rts-install.rule
+/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-stamp/rts-mkdir.rule
+/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-stamp/rts-download.rule
+/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-stamp/rts-update.rule
+/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-stamp/rts-patch.rule
+/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-stamp/rts-configure.rule
+/mnt/c/users/ddas/workspace-papyrusrt/NVCPS_CDTProject/build/rts-prefix/src/rts-stamp/rts-build.rule

@@ -1,0 +1,426 @@
+--- what is request type 2 in our papyrous rt model (need to match)
+
+MODULE protocol_NVCPSProtocol(conjugated, msg, param)
+ DEFINE
+	out_sendRequest := (conjugated = FALSE & msg = sendRequest); --- reqInParameter
+    out_sendRequest_choice := (out_sendRequest ? param : null);
+	in_fetchRequest := (conjugated = TRUE & msg = fetchRequest); --- requestType
+    in_fetchRequest_choice := (in_fetchRequest ? param : null);
+    
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+MODULE capsule_RequestGenerator(controller, inRequester)
+    VAR
+        request_type : {null, 0, 1}; --0: exit, 1: entry
+        port_RequestGenerator : protocol_NVCPSProtocol(FALSE, msg, request_type); ---clientPort
+        state : {p_initial, s_generate, wait_generator_turn};
+        msg : {null, sendRequest};
+    INIT
+        state = p_initial
+        & msg = null
+        & request_type = null
+    DEFINE
+        t1 := (state = p_initial);
+        t2a := (state = s_generate & inRequester.in_fetchRequest);
+        t2b := (state = wait_generator_turn);
+        t_none := !(t1 | t2a | t2b);
+    ASSIGN
+        next(request_type) := case
+            controller.t1: {0, 1};            
+            TRUE: request_type;
+            esac;
+        next(msg) := case
+            t2a: sendRequest;
+            TRUE: null;
+            esac;
+    TRANS t_none -> next(state) = state;
+    TRANS t1 -> (next(state) = s_generate);
+    TRANS t2a -> (next(state) = wait_generator_turn);
+    TRANS t2b -> (next(state) = s_generate);
+
+
+    INVAR (t_none
+    | (t1 & !t2a & !t2b)
+	| (!t1 & t2a & !t2b)
+	| (!t1 & !t2a & t2b)
+	)
+    
+    
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+MODULE capsule_ParkingController(generator, inReq)
+    VAR
+      
+
+        state : {p_initial, s_get_req, s_rec_req, s_req_choice, s_req_check, r_t_check, 
+                            exit, entry, entry_choice, user, user_choice, member, guest,mem_choice,valid,invalid,completed,
+                            token,gateEntry,gateOpen,gateClose,park, exit_choice, payment, pay_choice, pmt_guest, pmt_member, 
+                            guest_payment, member_payment, payment_completed, car_exit};
+
+        user_type: {null, 1, 2};
+        user_validation : {null, 0, 1};
+        port_ParkingController : protocol_NVCPSProtocol(TRUE, msg, generator.request_type); ---requestOutPort
+        msg: {null, fetchRequest};
+        slot_count: 0..5;
+
+        slot1: 0..2;    --0:empty; 1:member; 2: guest
+        slot2: 0..2;    --0:empty; 1:member; 2: guest
+        slot3: 0..2;    --0:empty; 1:member; 2: guest
+        slot4: 0..2;    --0:empty; 1:member; 2: guest
+        slot5: 0..2;    --0:empty; 1:member; 2: guest
+
+        slot_number: 0..5;        
+        is_slot1_active: boolean;
+        is_slot2_active: boolean;
+        is_slot3_active: boolean;
+        is_slot4_active: boolean;
+        is_slot5_active: boolean;
+
+        exit_user: {null, 1, 2};    --1:member; 2: guest
+
+
+    DEFINE
+
+        is_slot_check := ((is_slot1_active & slot_number =1) | (is_slot2_active & slot_number =2) | 
+        (is_slot3_active & slot_number =3) | (is_slot4_active & slot_number =4) | 
+        (is_slot5_active & slot_number =5));
+
+
+        t1 := (state = p_initial);
+        t2 := (state = s_get_req);
+        trigger_new_request := !(inReq.out_sendRequest_choice = null);
+        t3 := (state = s_rec_req & trigger_new_request);
+        t4 := (!(generator.request_type = 0 | generator.request_type = 1) & (state = s_req_choice));
+        t5 := ((generator.request_type = 0 | generator.request_type = 1) & (state = s_req_choice));
+        t6 := (!(generator.request_type = 2) & state = s_req_check);
+        t7 := ((generator.request_type = 0) & (state = r_t_check));
+        t8 := ((generator.request_type = 1) & (state = r_t_check));
+        t1_entry := ((generator.request_type = 1) & (state = entry));
+        t2_entry := ((generator.request_type = 1) & (state = entry_choice) & (slot_count <=0));
+        t3_entry := ((generator.request_type = 1) & (state = entry_choice) & (slot_count > 0 & slot_count <=5));
+        t4_entry := ((generator.request_type = 1) & (state = user));
+        tm1_entry := (state = user_choice & user_type = 1);
+        tm2_entry := (state = member & user_type = 1);
+        t5_entry := (state = user_choice & user_type = 2);
+
+        tm3_entry := (state = mem_choice & user_validation = 1);
+        tm4_entry := (state = mem_choice & user_validation = 0);
+        tm7_entry := (state = valid & user_validation = 1);
+
+        tm6_entry := (state = invalid & user_validation = 0) ;
+      
+        tG1_entry := (state = guest & user_type = 2);
+        tG2_entry := (state = token & user_type = 2);
+
+        t1_gate := (state = completed);
+        t2_gate := (state = gateEntry);
+        t3_gate := (state = gateOpen);
+        t4_gate := (state = gateClose);
+
+        t1_park := (state = park & is_slot_check);
+        t_park_wait := (state = park & !is_slot_check);
+
+
+        t1_exit := ((generator.request_type = 0) & (state = exit));
+        t5_exit := ((generator.request_type = 0) & (state = exit_choice) & (slot_count > 4));
+        t2_exit := ((generator.request_type = 0) & (state = exit_choice) & (slot_count < 5) & (slot_count >=0));
+        t3_exit := (state = payment & !is_slot_check);
+        t_exit_wait := (state = payment & is_slot_check);
+        
+        t4_exit := (state = pay_choice & exit_user=2);
+        t6_exit := (state = pay_choice & exit_user=1);
+        t7_exit := (state = pmt_member & exit_user=1);
+        t8_exit := (state = pmt_guest & exit_user=2);
+        t9_exit := (state = guest_payment);
+        t10_exit := (state = member_payment);
+        t11_exit := (state = payment_completed);
+        t9 := (state = car_exit);
+
+        t_none := !(t1 | t2 | t3 | t4 | t5 | t6 | t7 | t8 | t1_entry | t2_entry | t3_entry | t4_entry | tm1_entry | t5_entry  | tm2_entry
+         |tm3_entry | tm7_entry | tm4_entry  | tG1_entry |  tG2_entry  | t1_gate  | t2_gate | t3_gate | t4_gate | tm6_entry |  t1_park 
+         |t_park_wait | t1_exit | t5_exit | t2_exit | t3_exit | t_exit_wait | t4_exit | t6_exit | t7_exit | t8_exit | t9_exit | t10_exit | t11_exit | t9);
+    INIT
+
+    	
+        state = p_initial
+        & slot_count = 5
+        & msg = null
+        & user_type = null
+        & user_validation = null
+
+        & slot1 = 0
+        & slot2 = 0
+        & slot3 = 0
+        & slot4 = 0
+        & slot5 = 0
+        & slot_number=0
+        & is_slot1_active = TRUE
+        & is_slot2_active = TRUE
+        & is_slot3_active = TRUE
+        & is_slot4_active = TRUE
+        & is_slot5_active = TRUE         
+        & exit_user = null
+
+    ASSIGN
+        next(slot_count) := case            
+            (t1_park & slot_count > 0): (slot_count - 1);
+            (t9 & slot_count < 5): (slot_count + 1);
+            TRUE: slot_count;
+        esac;
+
+        next(msg) := case
+            t1: fetchRequest;
+            TRUE: null;
+        esac;
+        
+        next(user_type) := case
+            t4_entry: {1, 2};
+            tm4_entry: {2};            
+            TRUE: user_type;
+        esac;
+        
+        next(user_validation) := case
+            tm2_entry: {0, 1};
+            TRUE: user_validation;
+        esac;
+
+        next(slot_number):= case 
+            t4_gate | t2_exit: 1..5;            
+            t1: 0;
+            TRUE:slot_number;
+        esac;
+
+        next(exit_user):= case 
+            (t3_exit | t4_exit | t6_exit | t7_exit | t8_exit | t9_exit | t10_exit | t11_exit | t9) & slot_number = 1 & slot1=1: 1;
+            (t3_exit | t4_exit | t6_exit | t7_exit | t8_exit | t9_exit | t10_exit | t11_exit | t9) & slot_number = 1 & slot1=2: 2;
+
+            (t3_exit | t4_exit | t6_exit | t7_exit | t8_exit | t9_exit | t10_exit | t11_exit | t9) & slot_number = 2 & slot2=1: 1;
+            (t3_exit | t4_exit | t6_exit | t7_exit | t8_exit | t9_exit | t10_exit | t11_exit | t9) & slot_number = 2 & slot2=2: 2;
+
+            (t3_exit | t4_exit | t6_exit | t7_exit | t8_exit | t9_exit | t10_exit | t11_exit | t9) & slot_number = 3 & slot3=1: 1;
+            (t3_exit | t4_exit | t6_exit | t7_exit | t8_exit | t9_exit | t10_exit | t11_exit | t9) & slot_number = 3 & slot3=2: 2;
+
+            (t3_exit | t4_exit | t6_exit | t7_exit | t8_exit | t9_exit | t10_exit | t11_exit | t9) & slot_number = 4 & slot4=1: 1;
+            (t3_exit | t4_exit | t6_exit | t7_exit | t8_exit | t9_exit | t10_exit | t11_exit | t9) & slot_number = 4 & slot4=2: 2;
+
+            (t3_exit | t4_exit | t6_exit | t7_exit | t8_exit | t9_exit | t10_exit | t11_exit | t9) & slot_number = 5 & slot5=1: 1;
+            (t3_exit | t4_exit | t6_exit | t7_exit | t8_exit | t9_exit | t10_exit | t11_exit | t9) & slot_number = 5 & slot5=2: 2;
+            TRUE: null;
+        esac;
+
+        next(slot1):= case         
+         slot_number = 1 & user_type = 1 & t1_park & slot1=0 : 1;
+         slot_number = 1 & user_type = 2 & t1_park & slot1=0 : 2;
+         --slot_number = 1 & t3_exit & slot1>0: 0;
+         slot_number = 1 & t11_exit: 0;
+         TRUE: slot1;
+         esac;
+
+        next(is_slot1_active):= case          
+         (slot_number = 1 & (user_type = 1 |  user_type = 2) & t1_park & slot1 = 0) : FALSE;
+         (slot_number = 1 & (user_type = 1 |  user_type = 2) & t1_park & (slot1 = 1 | slot1= 2)): TRUE;
+         --slot_number = 1 & t3_exit & slot1>0: TRUE;
+         slot_number = 1 & t11_exit: TRUE;
+         TRUE: is_slot1_active;
+         esac;
+
+
+        next(slot2):= case          
+         slot_number = 2 & user_type = 1 & t1_park & slot2=0 : 1;
+         slot_number = 2 & user_type = 2 & t1_park & slot2=0 : 2;
+         --slot_number = 2 & t3_exit & slot2>0: 0;
+         slot_number = 2 & t11_exit: 0;
+         TRUE: slot2;
+         esac;
+
+        next(is_slot2_active):= case          
+         (slot_number = 2 & (user_type = 1 |  user_type = 2) & t1_park & slot2 = 0) : FALSE;
+         (slot_number = 2 & (user_type = 1 |  user_type = 2) & t1_park & (slot2 = 1 | slot2= 2)): TRUE;
+         --slot_number = 2 & t3_exit & slot2>0: TRUE;
+         slot_number = 2 & t11_exit: TRUE;
+         TRUE: is_slot2_active;
+         esac;
+
+        next(slot3):= case 
+         slot_number = 3 & user_type = 1 & t1_park & slot3=0 : 1;
+         slot_number = 3 & user_type = 2 & t1_park & slot3=0 : 2;
+         --slot_number = 3 & t3_exit & slot3>0: 0;
+         slot_number = 3 & t11_exit: 0;
+         TRUE: slot3;
+         esac;
+
+        next(is_slot3_active):= case 
+         (slot_number = 3 & (user_type = 1 |  user_type = 2) & t1_park & slot3 = 0) : FALSE;
+         (slot_number = 3 & (user_type = 1 |  user_type = 2) & t1_park & (slot3 = 1 | slot3= 2)): TRUE;
+         --slot_number = 3 & t3_exit & slot3>0: TRUE;
+         slot_number = 3 & t11_exit: TRUE;
+         TRUE: is_slot3_active;
+         esac;
+ 
+        next(slot4):= case 
+         slot_number = 4 & user_type = 1 & t1_park & slot4=0 : 1;
+         slot_number = 4 & user_type = 2 & t1_park & slot4=0 : 2;
+         --slot_number = 4 & t3_exit & slot4>0: 0;
+         slot_number = 4 & t11_exit: 0;
+         TRUE: slot4;
+         esac;
+
+        next(is_slot4_active):= case 
+         (slot_number = 4 & (user_type = 1 |  user_type = 2) & t1_park & slot4 = 0) : FALSE;
+         (slot_number = 4 & (user_type = 1 |  user_type = 2) & t1_park & (slot4 = 1 | slot4= 2)): TRUE;
+         --slot_number = 4 & t3_exit & slot4>0: TRUE;
+         slot_number = 4 & t11_exit: TRUE;
+         TRUE: is_slot4_active;
+         esac; 
+
+        next(slot5):= case 
+         slot_number = 5 & user_type = 1 & t1_park & slot5=0 : 1;
+         slot_number = 5 & user_type = 2 & t1_park & slot5=0 : 2;
+         --slot_number = 5 & t3_exit & slot5>0: 0;
+         slot_number = 5 & t11_exit: 0;
+         TRUE: slot5;
+         esac;
+
+        next(is_slot5_active ):= case 
+         (slot_number = 5 & (user_type = 1 |  user_type = 2) & t1_park & slot5 = 0) : FALSE ;
+         (slot_number = 5 & (user_type = 1 |  user_type = 2) & t1_park & (slot5 = 1 | slot5= 2)): TRUE;
+         --slot_number = 5 & t3_exit & slot5>0: TRUE;
+         slot_number = 5 & t11_exit: TRUE;
+         TRUE: is_slot5_active;
+         esac;                                    
+         
+    TRANS t1 -> (next(state) = s_get_req);
+    TRANS t2 -> (next(state) = s_rec_req);
+    TRANS t3 -> (next(state) = s_req_choice);
+    TRANS t4 -> (next(state) = s_get_req);
+    TRANS t5 -> (next(state) = s_req_check);
+    TRANS t6 -> (next(state) = r_t_check);
+    TRANS t7 -> (next(state) = exit);
+    TRANS t8 -> (next(state) = entry);
+    TRANS t1_entry -> (next(state) = entry_choice);
+    TRANS t2_entry -> (next(state) = p_initial);
+    TRANS t3_entry -> (next(state) = user);
+    TRANS t4_entry -> (next(state) = user_choice);
+    TRANS tm1_entry -> (next(state) = member);
+    TRANS t5_entry  -> (next(state) = guest);
+
+    TRANS tG1_entry -> (next(state) = token);
+    TRANS tG2_entry -> (next(state) = completed);
+
+    TRANS tm2_entry -> (next(state) = mem_choice);
+    TRANS tm3_entry -> (next(state) = valid);
+    TRANS tm4_entry -> (next(state) = invalid);
+    TRANS tm6_entry -> (next(state) = guest);
+
+    TRANS tm7_entry -> (next(state) = completed);
+
+
+    TRANS t1_gate -> (next(state) = gateEntry);
+    TRANS t2_gate -> (next(state) = gateOpen);
+    TRANS t3_gate -> (next(state) = gateClose);
+    TRANS t4_gate -> (next(state) = park);
+
+    TRANS t1_park -> (next(state) = p_initial);
+    TRANS  t_park_wait -> (next(state) = gateClose);
+
+    TRANS t1_exit -> (next(state) = exit_choice);
+    TRANS t5_exit -> (next(state) = p_initial);
+    TRANS t2_exit -> (next(state) = payment);
+    TRANS t3_exit -> (next(state) = pay_choice);
+    TRANS t_exit_wait -> (next(state) = exit_choice);
+
+    TRANS t4_exit -> (next(state) = pmt_guest);
+    TRANS t6_exit -> (next(state) = pmt_member);
+    TRANS t7_exit -> (next(state) = member_payment);
+    TRANS t8_exit -> (next(state) = guest_payment);    
+    TRANS t9_exit -> (next(state) = payment_completed);
+    TRANS t10_exit -> (next(state) = payment_completed);
+    TRANS t11_exit -> (next(state) = car_exit);
+    TRANS t9 -> (next(state) = p_initial);
+
+    INVAR (t_none
+    | (t1  & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry &  !tm2_entry& !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+	| (!t1 & t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & t3  & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+	| (!t1 & !t2 & !t3 & t4  & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+	| (!t1 & !t2 & !t3 & !t4 & t5  & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+	| (!t1 & !t2 & !t3 & !t4 & !t5 & t6  & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+	| (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & t7  & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+	| (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & t8  & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 &  t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & t2_entry  & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & t3_entry  & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & t4_entry  & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & tm1_entry  & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & t5_entry &  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  tm2_entry  & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & tG1_entry   & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  &  tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)    
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry & t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry & !t1_gate & t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry & !t1_gate & !t2_gate & t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry & !t1_gate & !t2_gate & !t3_gate & t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry & !t1_gate & !t2_gate & !t3_gate & !t4_gate& tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry & !t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry & !t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry & !t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry & !t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2 & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry & !t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)	 
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & t8_exit & !t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & t9_exit & !t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & t10_exit & !t11_exit & !t9)
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & t11_exit & !t9)
+    | (!t1 & !t2  & !t3 & !t4 & !t5 & !t6 & !t7 & !t8 & !t1_entry & !t2_entry & !t3_entry & !t4_entry & !tm1_entry & !t5_entry&  !tm2_entry & !tG1_entry  & !tG2_entry &!t1_gate & !t2_gate & !t3_gate & !t4_gate& !tm3_entry & !tm4_entry & !tm7_entry & !tm6_entry & !t1_park & !t_park_wait & !t1_exit & !t2_exit & !t5_exit & !t3_exit & !t_exit_wait & !t4_exit & !t6_exit & !t7_exit & !t8_exit & !t9_exit & !t10_exit & !t11_exit & t9)
+    )
+
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+MODULE main
+    VAR
+	    generator : capsule_RequestGenerator(controller, controller.port_ParkingController);
+        controller : capsule_ParkingController(generator, generator.port_RequestGenerator);
+    
+    -- INVAR ( controller.one & controller.not_initial);
+----------------------------------------------------------------------------------
+------------------------------------------------------------------------------------
+
+
+--1. On system initialization, 'Controller' sends 'request' to 'RequestGenerator' and 'RequestGenerator' does nothing
+LTLSPEC G(generator.state=p_initial -> generator.msg = null)  --TRUE
+--2. 'RequestGenerator' replies 'requestType' when 'Controller' send request
+LTLSPEC G(controller.msg = fetchRequest -> (!(generator.request_type = null)  & (X generator.msg = sendRequest))) --TRUE
+--3. If user is 'guest', he/she should have guestPayment option
+LTLSPEC G(controller.state=guest_payment -> controller.exit_user = 2) --TRUE
+--4. If user is 'member', he/she should have memberPayment option
+LTLSPEC G(controller.state=member_payment -> controller.exit_user = 1) --TRUE
+--5. During entry request, 'Controller' decrease slot_count (by 1) in 'park' state
+LTLSPEC F(controller.slot_count=2 -> (controller.slot_count=3 U controller.state=park)) --TRUE
+--6. During exit request, 'Controller' increase slot_count (by 1) in 'car_exit' state
+LTLSPEC F(controller.slot_count=3 -> (controller.slot_count=2 U controller.state=car_exit)) --TRUE
+--7. If there are available slots then at some point of time car will be parked
+LTLSPEC G(controller.state=park -> (controller.slot_count=0 U (controller.slot_count>0 & generator.request_type=1))) --TRUE
+--8. If any slots are occupied then at some point of time car will exit
+LTLSPEC G(controller.state=car_exit -> (controller.exit_user=null U (controller.slot_count<5 & generator.request_type=0))) --TRUE
+--9. If 'member' is not valid user then let him/her park car as 'guest' user 
+LTLSPEC G((controller.user_type = 2 & controller.state = member) -> controller.user_validation = 0) --TRUE
+--10. If a member user parked a car in slot1 then it should be member user when a car exit from slot1
+CTLSPEC EG(controller.exit_user=1 -> (controller.slot1=1 & controller.slot_number=1)) --TRUE
+--11. If a guest user parked a car in slot1 then it should be guest user when a car exit from slot1
+CTLSPEC EG(controller.exit_user=2 -> (controller.slot1=2 & controller.slot_number=1)) --TRUE
+
+
+CTLSPEC EF(controller.slot_count>5)
+CTLSPEC EF(controller.slot_count<0)
